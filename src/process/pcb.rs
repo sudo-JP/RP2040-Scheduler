@@ -1,16 +1,45 @@
+use core::clone::Clone;
+use core::marker::Copy;
+
+#[repr(C)]
 pub enum ProcessState {
     Ready, 
     Running, 
     Blocked,
 }
 
-#[repr(C)]
+impl Clone for ProcessState {
+    fn clone(&self) -> Self {
+        match self {
+            ProcessState::Ready => ProcessState::Ready,
+            ProcessState::Running => ProcessState::Running,
+            ProcessState::Blocked => ProcessState::Blocked,
+        }
+    }
+}
+
+impl Copy for ProcessState {}
+
+#[repr(C, packed)]
 pub struct PCB {
+    pub sp: *mut u32,           // Stack pointer, we on 32-bit arch 
     pub pid: u8, 
     pub state: ProcessState, 
-    pub killed: bool, 
 
-    pub sp: *mut u32,           // Stack pointer, we on 32-bit arch 
     pub stack_base: *mut u8,    // Where stack allocation starts 
     pub stack_size: usize,      // Stack size, native size 
 }
+
+impl Clone for PCB {
+    fn clone(&self) -> Self {
+        PCB {
+            pid: self.pid,
+            state: self.state,
+            sp: self.sp, 
+            stack_base: self.stack_base, 
+            stack_size: self.stack_size,
+        }
+    }
+}
+
+impl Copy for PCB {}

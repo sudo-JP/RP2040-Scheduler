@@ -7,6 +7,8 @@ use core::result::Result::{Ok, Err};
 
 static mut NEXT_FREE: usize = 0; 
 static mut ID: u8 = 0; 
+
+#[derive(Debug)]
 pub enum ProcessError {
     NoMemory, 
     InvalidSize, 
@@ -74,7 +76,6 @@ pub unsafe fn create_process(entry: fn() -> !,
         Ok(PCB {
             pid: id, 
             state: ProcessState::Ready, 
-            killed: false,
 
             sp: sp,
             stack_base: stack_start, 

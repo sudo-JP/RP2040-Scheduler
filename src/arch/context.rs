@@ -16,7 +16,7 @@ r1 correspond to new_pcb
 pub unsafe extern "C" fn switch_context(old_pcb: *mut PCB, new_pcb: *const PCB) {
     core::arch::naked_asm!(
         // 1.
-        "push {{r4-r7}}",          // Save callee-saved registers
+        "push {{r4-r7}}",       // Save callee-saved registers
         // ARM Cortex-M0+ only let push and pop on r0-r7
         "mov r4, r8",
         "mov r5, r9", 
@@ -25,15 +25,15 @@ pub unsafe extern "C" fn switch_context(old_pcb: *mut PCB, new_pcb: *const PCB) 
         "push {{r4-r7}}",
 
         // 2. 
-        "mov r2, sp",               // Get stack pointer 
-        "str r2, [r0, #8]",         // Store the r2 (current sp) to old_pcb->sp
+        "mov r2, sp",           // Get stack pointer 
+        "str r2, [r0, #4]",     // Store the r2 (current sp) to old_pcb->sp
 
         // 3. 
-        "ldr r2, [r1, #8]",         // Load sp from new_pcb to r2 
-        "mov sp, r2",               // Place new_pcb->sp to current sp 
+        "ldr r2, [r1, #4]",     // Load sp from new_pcb to r2 
+        "mov sp, r2",           // Place new_pcb->sp to current sp 
                                     
         // 4. 
-        "pop {{r4-r7}}",           // Pop from callee
+        "pop {{r4-r7}}",        // Pop from callee
 
         // Put R4 content, which is R8 old value back into R8 and pop it
         "mov r8, r4", 
@@ -42,8 +42,8 @@ pub unsafe extern "C" fn switch_context(old_pcb: *mut PCB, new_pcb: *const PCB) 
         "mov r11, r7",
         "pop {{r4-r7}}",
 
-        // 5. 
-        "bx lr",                    // Return 
+        // 5. Return instr
+        "bx lr",                // Return 
     );
 }
 
