@@ -11,7 +11,7 @@ use rp2040_hal::gpio::{Pin, FunctionSioOutput, PullDown};
 use hal::gpio::bank0::{Gpio0, Gpio1};
 use core::ptr;
 
-use rp2040_scheduler::{create_process, set_alarm, start_first_process, yield_now, Scheduler, CURRENT, PROCS, SCHEDULER};
+use rp2040_scheduler::{create_process, set_alarm, start_first_process, Scheduler, CURRENT, PROCS, SCHEDULER};
 
 #[unsafe(link_section = ".boot2")]
 #[used]
@@ -70,9 +70,19 @@ fn main() -> ! {
     // Configure GPIO0 as an output
 
 
-    let led_pin0 = pins.gpio0.into_push_pull_output(); 
-    let led_pin1 = pins.gpio1.into_push_pull_output(); 
+    let mut led_pin0 = pins.gpio0.into_push_pull_output(); 
+    let mut led_pin1 = pins.gpio1.into_push_pull_output(); 
     let stack_size = 1024; 
+
+    // Debug: Quick blink to show we got this far before starting scheduler
+    for _ in 0..3 {
+        let _ = led_pin0.set_high();
+        let _ = led_pin1.set_high();
+        timer.delay_ms(100);
+        let _ = led_pin0.set_low();
+        let _ = led_pin1.set_low();
+        timer.delay_ms(100);
+    }
 
     set_alarm(alarm); 
     unsafe {
@@ -87,8 +97,9 @@ fn main() -> ! {
             .unwrap();
 
         CURRENT = Some(0);
+        // Dequeue process 0 since we're about to run it
         let sched = ptr::addr_of_mut!(SCHEDULER); 
-        (*sched).dequeue().unwrap();
+        let _ = (*sched).dequeue();
         start_first_process(PROCS[0].unwrap().sp);
     }
     
@@ -118,9 +129,9 @@ fn blink_fast(_arg: *mut ()) -> ! {
                 .unwrap();
             
             led.set_high().unwrap();
-            //timer.delay_ms(20);
+            timer.delay_ms(20);
             led.set_low().unwrap();
-            //timer.delay_ms(20);
+            timer.delay_ms(20);
         }
     }
 }
@@ -143,10 +154,12 @@ fn blink_slow(_arg: *mut ()) -> ! {
                 .unwrap();
             
             led.set_high().unwrap();
-            //timer.delay_ms(20);
+            timer.delay_ms(20);
             led.set_low().unwrap();
-            //timer.delay_ms(20);
+            timer.delay_ms(20);
         }
     }
 }
+
+
 

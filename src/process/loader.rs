@@ -35,43 +35,56 @@ fn allocate_stack(size: usize) -> Result<*mut u8, ProcessError> {
     }
 }
 
-use crate::arch::process_trampoline;
-
 /// Set up initial stack for a new process
-/// Stack layout (growing down):
-///   [High address]
-///   LR (-> trampoline)
-///   R7, R6, R5 (arg), R4 (entry)
-///   R11, R10, R9, R8 (as R7-R4)
-///   [Low address] <- SP points here
+/// Uses exception frame format so ISR can switch to it via bx lr (EXC_RETURN)
+/// 
+/// Memory layout (address increasing downward in this diagram):
+///   sp+0:  R4         <- SP points here (lowest address)
+///   sp+4:  R5
+///   sp+8:  R6
+///   sp+12: R7
+///   sp+16: R8
+///   sp+20: R9
+///   sp+24: R10
+///   sp+28: R11
+///   sp+32: R0 (arg)   <- exception frame starts here
+///   sp+36: R1
+///   sp+40: R2
+///   sp+44: R3
+///   sp+48: R12
+///   sp+52: LR
+///   sp+56: PC (entry)
+///   sp+60: xPSR       <- (highest address, stack top before push)
+///
 unsafe fn setup_initial_stack(stack_base: *mut u8, 
     stack_size: usize, entry: fn(*mut ()) -> !, arg: *mut()) -> *mut u32 {
-    let mut sp = (stack_base as usize + stack_size) as *mut u32;
+    // Start at top of stack
+    let stack_top = (stack_base as usize + stack_size) as *mut u32;
+    
+    // We'll write 16 words total (8 for callee-saved + 8 for exception frame)
+    // SP will point to bottom (lowest address)
+    let sp = unsafe { stack_top.offset(-16) };
 
     unsafe {
-        // LR - points to trampoline
-        sp = sp.offset(-1);
-        *sp = (process_trampoline as usize as u32) | 1; // Thumb bit
-
-        // R4-R7: R4=entry, R5=arg, R6=0, R7=0
-        sp = sp.offset(-1);
-        *sp = 0; // R7
-        sp = sp.offset(-1);
-        *sp = 0; // R6
-        sp = sp.offset(-1);
-        *sp = arg as usize as u32; // R5 = arg
-        sp = sp.offset(-1);
-        *sp = (entry as usize as u32) | 1; // R4 = entry (with Thumb bit)
-
-        // R8-R11 (stored as R4-R7 in push order)
-        sp = sp.offset(-1);
-        *sp = 0; // R11
-        sp = sp.offset(-1);
-        *sp = 0; // R10
-        sp = sp.offset(-1);
-        *sp = 0; // R9
-        sp = sp.offset(-1);
-        *sp = 0; // R8
+        // Callee-saved registers at sp+0 to sp+28
+        *sp.offset(0) = 0;  // R4
+        *sp.offset(1) = 0;  // R5
+        *sp.offset(2) = 0;  // R6
+        *sp.offset(3) = 0;  // R7
+        *sp.offset(4) = 0;  // R8
+        *sp.offset(5) = 0;  // R9
+        *sp.offset(6) = 0;  // R10
+        *sp.offset(7) = 0;  // R11
+        
+        // Exception frame at sp+32 to sp+60
+        *sp.offset(8) = arg as usize as u32;  // R0 = arg
+        *sp.offset(9) = 0;   // R1
+        *sp.offset(10) = 0;  // R2
+        *sp.offset(11) = 0;  // R3
+        *sp.offset(12) = 0;  // R12
+        *sp.offset(13) = 0xFFFFFFFF;  // LR (dummy)
+        *sp.offset(14) = (entry as usize as u32) | 1;  // PC
+        *sp.offset(15) = 0x01000000;  // xPSR (Thumb bit)
     }
 
     sp
