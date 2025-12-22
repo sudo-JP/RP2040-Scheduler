@@ -8,7 +8,6 @@ MEMORY {
     FLASH : ORIGIN = 0x10000100, LENGTH = 2048K - 0x100
 
     /* Ram size */ 
-    RAM : ORIGIN = 0x20000000, LENGTH = 256K
 
     /*
      * We want KERNEL + WIFI + PROCESSE = 256K 
@@ -16,7 +15,7 @@ MEMORY {
      * Reserve 20kB for kernel stack 
      */
 
-    KERNEL_DATA : ORIGIN = 0x20000000, LENGTH = 20K 
+    RAM : ORIGIN = 0x20000000, LENGTH = 20K 
 
     /* Wifi needs 90kB */
     WIFI : ORIGIN = 0x20005000, LENGTH = 90K 
@@ -98,8 +97,8 @@ SECTIONS {
 } INSERT AFTER .uninit;
 
 /* Export symbols for Rust code to access memory regions */
-_kernel_data_start = ORIGIN(KERNEL_DATA);
-_kernel_data_size = LENGTH(KERNEL_DATA);
+_kernel_data_start = ORIGIN(RAM);
+_kernel_data_size = LENGTH(RAM);
 
 _wifi_start = ORIGIN(WIFI);
 _wifi_size = LENGTH(WIFI);

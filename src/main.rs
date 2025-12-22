@@ -7,9 +7,11 @@ use rp2040_hal as hal;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::digital::OutputPin;
 use hal::pac;
+use rp2040_hal::gpio::{Pin, FunctionSioOutput, PullDown};
+use hal::gpio::bank0::{Gpio0, Gpio1};
 use core::ptr;
 
-use rp2040_scheduler::{create_process, yield_now, Scheduler, CURRENT, PROCS, SCHEDULER};
+use rp2040_scheduler::{create_process, jump_to_process, yield_now, Scheduler, CURRENT, PROCS, SCHEDULER};
 
 #[unsafe(link_section = ".boot2")]
 #[used]
@@ -20,12 +22,15 @@ pub static BOOT2: [u8; 256] = rp2040_boot2::BOOT_LOADER_GENERIC_03H;
 /// if your board has a different frequency
 const XTAL_FREQ_HZ: u32 = 12_000_000u32;
 
-static mut COUNTER1: u32 = 0;
-static mut COUNTER2: u32 = 0;
+
+type Led0 = Pin<Gpio0, FunctionSioOutput, PullDown>;
+type Led1 = Pin<Gpio1, FunctionSioOutput, PullDown>;
+pub static mut LED0: Option<Led0> = None;
+pub static mut LED1: Option<Led1> = None;
+pub static mut TIMER: Option<hal::Timer> = None;
 
 #[rp2040_hal::entry]
 fn main() -> ! {
-    /*
     // Grab our singleton objects
     let mut pac = pac::Peripherals::take().unwrap();
 
@@ -59,63 +64,90 @@ fn main() -> ! {
 
     // Configure GPIO0 as an output
 
-    let mut led_pin = pins.gpio0.into_push_pull_output(); */
+
+    let led_pin0 = pins.gpio0.into_push_pull_output(); 
+    let led_pin1 = pins.gpio1.into_push_pull_output(); 
     let stack_size = 1024; 
     unsafe {
-        let pcb1 = match create_process(proc1, stack_size) {
-            Ok(p) => p, 
-            Err(_) => panic!("Unable to create process")
-        };
-        let pcb2 = match create_process(proc2, stack_size) {
-            Ok(p) => p, 
-            Err(_) => panic!("Unable to create process")
-        };
+        LED0 = Some(led_pin0);
+        LED1 = Some(led_pin1);
+        TIMER = Some(timer);
 
-        PROCS[pcb1.pid as usize] = Some(pcb1);
-        PROCS[pcb2.pid as usize] = Some(pcb2);
+        create_process(stack_size, blink_fast, core::ptr::null_mut())
+            .unwrap();
+        create_process(stack_size, blink_slow, core::ptr::null_mut())
+            .unwrap();
 
-        let sched = ptr::addr_of_mut!(SCHEDULER); 
-        (*sched).enqueue(pcb1.pid).unwrap();
-        (*sched).enqueue(pcb2.pid).unwrap();
-
-        CURRENT = Some(pcb1.pid);
-        
+        if PROCS[0].is_none() || PROCS[1].is_none() {
+        // Process creation failed - blink SOS
+            loop {
+                (*ptr::addr_of_mut!(LED0)).as_mut().unwrap().set_high().unwrap();
+                (*ptr::addr_of_mut!(TIMER)).as_mut().unwrap().delay_ms(20);
+                (*ptr::addr_of_mut!(LED0)).as_mut().unwrap().set_low().unwrap();
+                (*ptr::addr_of_mut!(TIMER)).as_mut().unwrap().delay_ms(20);
+            }
+        }
+        CURRENT = Some(0);
+        jump_to_process(PROCS[0].unwrap().sp);
     }
     
     loop {
         // TODO: This will eventually be your scheduler loop
-    }
-}
-
-fn proc1() -> ! {
-    loop {
-        unsafe { COUNTER1 += 1; yield_now(); }
-    }
-}
-
-fn proc2() -> ! {
-    loop {
-        unsafe { COUNTER2 += 1; yield_now(); }
-    }
-}
-
-/*fn blink_fast() -> ! {
-    loop {
-        led_pin.set_high().unwrap();
+        /*led_pin1.set_high();
         timer.delay_ms(500);
-        led_pin.set_low().unwrap();
-        timer.delay_ms(500);
+        led_pin1.set_high();
+        timer.delay_ms(500);*/
+    }
+}
+fn blink_fast(_arg: *mut ()) -> ! {    
+    loop {
+        unsafe {
+            let led = ptr::addr_of_mut!(LED0)
+                .cast::<Option<Led0>>()
+                .as_mut()
+                .unwrap()
+                .as_mut()
+                .unwrap();
+            
+            let timer = ptr::addr_of_mut!(TIMER)
+                .cast::<Option<hal::Timer>>()
+                .as_mut()
+                .unwrap()
+                .as_mut()
+                .unwrap();
+            
+            led.set_high().unwrap();
+            timer.delay_ms(500);
+            led.set_low().unwrap();
+            timer.delay_ms(500);
+            yield_now().unwrap();
+        }
     }
 }
 
-fn blink_slow() -> ! {
-    // Configure GPIO0 as an output
-    let mut led_pin = pins.gpio0.into_push_pull_output();
+fn blink_slow(_arg: *mut ()) -> ! {
     loop {
-        led_pin.set_high().unwrap();
-        timer.delay_ms(1000);
-        led_pin.set_low().unwrap();
-        timer.delay_ms(1000);
+        unsafe {
+            let led = ptr::addr_of_mut!(LED0)
+                .cast::<Option<Led1>>()
+                .as_mut()
+                .unwrap()
+                .as_mut()
+                .unwrap();
+            
+            let timer = ptr::addr_of_mut!(TIMER)
+                .cast::<Option<hal::Timer>>()
+                .as_mut()
+                .unwrap()
+                .as_mut()
+                .unwrap();
+            
+            led.set_high().unwrap();
+            timer.delay_ms(1000);
+            led.set_low().unwrap();
+            timer.delay_ms(1000);
+            yield_now().unwrap();
+        }
     }
-}*/
+}
 

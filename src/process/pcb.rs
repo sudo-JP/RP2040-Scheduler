@@ -26,6 +26,7 @@ pub struct PCB {
     pub pid: u8, 
     pub state: ProcessState, 
 
+    pub first_run: bool, 
     pub stack_base: *mut u8,    // Where stack allocation starts 
     pub stack_size: usize,      // Stack size, native size 
 }
@@ -33,9 +34,10 @@ pub struct PCB {
 impl Clone for PCB {
     fn clone(&self) -> Self {
         PCB {
+            sp: self.sp, 
             pid: self.pid,
             state: self.state,
-            sp: self.sp, 
+            first_run: self.first_run,
             stack_base: self.stack_base, 
             stack_size: self.stack_size,
         }

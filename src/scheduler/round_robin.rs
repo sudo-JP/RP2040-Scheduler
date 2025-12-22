@@ -1,5 +1,5 @@
 use crate::scheduler::{Scheduler, MAX_PROCS};
-use crate::SchedulerError;
+use crate::{SchedulerError, PROCS};
 
 pub struct RR {
     queue: [Option<u8>; MAX_PROCS],

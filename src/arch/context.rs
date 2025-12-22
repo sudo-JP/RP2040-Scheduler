@@ -15,45 +15,69 @@ r1 correspond to new_pcb
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn switch_context(old_pcb: *mut PCB, new_pcb: *const PCB) {
     core::arch::naked_asm!(
-        // 1.
-        "push {{r4-r7}}",       // Save callee-saved registers
-        // ARM Cortex-M0+ only let push and pop on r0-r7
+        // Save LR first
+        "push {{lr}}",
+        
+        // Save R4-R7
+        "push {{r4-r7}}",
+        
+        // Save R8-R11
         "mov r4, r8",
         "mov r5, r9", 
         "mov r6, r10", 
         "mov r7, r11", 
         "push {{r4-r7}}",
 
-        // 2. 
-        "mov r2, sp",           // Get stack pointer 
-        "str r2, [r0, #0]",     // Store the r2 (current sp) to old_pcb->sp
+        // Save SP to old_pcb
+        "mov r2, sp",
+        "str r2, [r0, #0]",
 
-        // 3. 
-        "ldr r2, [r1, #0]",     // Load sp from new_pcb to r2 
-        "mov sp, r2",           // Place new_pcb->sp to current sp 
-                                    
-        // 4. 
-        "pop {{r4-r7}}",        // Pop from callee
-
-        // Put R4 content, which is R8 old value back into R8 and pop it
+        // Load SP from new_pcb
+        "ldr r2, [r1, #0]",
+        "mov sp, r2",
+        
+        // Restore R8-R11
+        "pop {{r4-r7}}",
         "mov r8, r4", 
         "mov r9, r5",
         "mov r10, r6",
         "mov r11, r7",
+        
+        // Restore R4-R7
         "pop {{r4-r7}}",
-
-        // 5. Return instr
-        "bx lr",                // Return 
+        
+        // Restore LR
+        "pop {{r0}}",
+        "mov lr, r0",
+        
+        // Return
+        "bx lr",
     );
 }
-
 
 #[unsafe(naked)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn jump_to_process(sp: *const u32) {
     core::arch::naked_asm!(
-        "msr msp, r0",          // set main stack ptr to sp
-        "ldr r0, =0xFFFFFFF9",  // EXC_RETURN for thread mode with MSP
-        "bx lr", 
+        "mov sp, r0",           // Set stack pointer 
+        
+        // Pop R4-R11 (our saved context)
+        "pop {{r4-r7}}",
+        "mov r8, r4",
+        "mov r9, r5",
+        "mov r10, r6",
+        "mov r11, r7",
+        "pop {{r4-r7}}",
+        
+        // Pop exception frame: R0-R3, R12, LR, PC, xPSR
+        "pop {{r0-r3}}",
+        "pop {{r4}}",           // R12 -> r4
+        "mov r12, r4",
+        "pop {{r4}}",           // LR -> r4
+        "mov lr, r4",
+        "pop {{r4}}",           // PC -> r4
+        "pop {{r5}}",           // xPSR (ignore)
+        
+        "bx r4",                // Jump to PC
     );
 }
