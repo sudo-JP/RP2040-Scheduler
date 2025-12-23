@@ -1,6 +1,6 @@
-# RPKernl: A Bare-Metal Kernel for Raspberry Pi Pico
+# JPKernl: A Bare-Metal Kernel for Raspberry Pi Pico
 
-**RPKernl** is a custom, preemptive kernel written in Rust for the Raspberry Pi Pico (RP2040 microcontroller). This project is an exploration of low-level systems programming, focusing on process scheduling, context switching, and system call infrastructure in a `no_std` environment.
+**JPKernl** is a custom, preemptive kernel written in Rust for the Raspberry Pi Pico (RP2040 microcontroller). This project is an exploration of low-level systems programming, focusing on process scheduling, context switching, and system call infrastructure in a `no_std` environment.
 
 ## Project Status
 Active Development. Core scheduling and process management are implemented. System calls and advanced scheduling features are in progress.
