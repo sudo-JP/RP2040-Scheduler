@@ -50,46 +50,16 @@ pub unsafe extern "C" fn TIMER_IRQ_0() {
         "mov r1, r11",
         "str r1, [r0, #28]", 
 
-        // Save new PSP (points to saved R4)
+        // Save new r0 
         "msr psp, r0", 
 
         // Alarm handler
         "bl handle_alarm", 
 
-        // Call to get new sp, result in r0 (null = no switch)
+        // Call to get new sp, result stores in r0 
         "bl get_new_sp",
 
-        // Check if null (no switch needed)
-        "cmp r0, #0",
-        "beq 1f",
-
-        // Switch: r0 = new_sp, call setcontext
+        // set new context given r0
         "bl setcontext",
-
-        // No switch: restore R4-R11 from PSP and return
-        "1:",
-        "mrs r0, psp",
-        
-        "ldr r4, [r0, #0]",
-        "ldr r5, [r0, #4]",
-        "ldr r6, [r0, #8]",
-        "ldr r7, [r0, #12]",
-        
-        "ldr r1, [r0, #16]",
-        "mov r8, r1",
-        "ldr r1, [r0, #20]",
-        "mov r9, r1",
-        "ldr r1, [r0, #24]",
-        "mov r10, r1",
-        "ldr r1, [r0, #28]",
-        "mov r11, r1",
-        
-        // Restore PSP to exception frame
-        "adds r0, r0, #32",
-        "msr psp, r0",
-        
-        // Return via EXC_RETURN
-        "ldr r0, =0xFFFFFFFD",
-        "bx r0",
     );
 }

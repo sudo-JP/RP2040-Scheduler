@@ -1,7 +1,6 @@
 use crate::{check_sleep_and_wake, Scheduler, CURRENT, PCB, PROCS, SCHEDULER, SLEEP_QUEUE};
 use core::ptr;
 
-/// Returns new SP to switch to, or null if no switch needed
 #[unsafe(no_mangle)]
 extern "C" fn get_new_sp() -> *const u32 {
     let psp: *mut u32 = cortex_m::register::psp::read() as *mut u32;
@@ -10,60 +9,44 @@ extern "C" fn get_new_sp() -> *const u32 {
     
     unsafe {
         let old_pid = CURRENT.unwrap();
-        let old_pcb: *mut PCB = PROCS[old_pid as usize].as_mut().unwrap();
-        
-        // Save SP first
-        (*old_pcb).sp = psp;
 
-        // Check if current process is blocked
-        let current_is_blocked = matches!((*old_pcb).state, crate::ProcessState::Blocked(_));
-
-        loop {
-            // Wake up sleeping processes
-            while (*sleep_q).get_size() > 0 {
-                if check_sleep_and_wake().is_err() {
-                    break; 
-                }
-            }
-
-            // Try to get next process
-            match (*sched).dequeue() {
-                Ok(next_pid) => {
-                    // Re-enqueue old if Ready/Running
-                    match (*old_pcb).state {
-                        crate::ProcessState::Ready | crate::ProcessState::Running => {
-                            let _ = (*sched).enqueue(old_pid);
-                        }
-                        _ => {},
-                    }
-
-                    // No switch needed - same process
-                    if old_pid == next_pid {
-                        return core::ptr::null();
-                    }
-                    
-                    CURRENT = Some(next_pid);
-                    
-                    let new_pcb: *mut PCB = PROCS[next_pid as usize].as_mut().unwrap();
-                    
-                    (*old_pcb).state = crate::ProcessState::Ready;
-                    (*new_pcb).state = crate::ProcessState::Running;
-
-                    return (*new_pcb).sp as *const u32;
-                }
-                Err(_) => {
-                    // Queue empty
-                    if current_is_blocked {
-                        // Current is blocked - MUST wait for someone to wake
-                        // Spin until a sleeper is ready
-                        continue;
-                    } else {
-                        // Current is runnable - no switch needed
-                        return core::ptr::null();
-                    }
-                }
+        // wake up all sleeping processes 
+        while (*sleep_q).get_size() > 0 {
+            if check_sleep_and_wake().is_err() {
+                break; 
             }
         }
+
+        let old_pcb: *mut PCB = PROCS[old_pid as usize].as_mut().unwrap();
+        (*old_pcb).sp = psp;
+
+        match (*old_pcb).state {
+            crate::ProcessState::Ready | crate::ProcessState::Running => {
+                let _ = (*sched).enqueue(old_pid);
+            }
+            _ => {},
+        }
+
+        // Get new process
+        let next_pid = match (*sched).dequeue() {
+            Ok(pid) => pid, 
+            Err(_) => { 
+                return psp as *const u32;
+            }
+        };
+        
+        if old_pid == next_pid {
+            return psp as *const u32;
+        }
+        
+        CURRENT = Some(next_pid);
+        
+        let new_pcb: *mut PCB = PROCS[next_pid as usize].as_mut().unwrap();
+        
+        (*old_pcb).state = crate::ProcessState::Ready;
+        (*new_pcb).state = crate::ProcessState::Running;
+
+        return (*new_pcb).sp as *const u32;
     }
 }
 
@@ -202,43 +185,13 @@ pub unsafe extern "C" fn PendSV() {
         "mov r1, r11",
         "str r1, [r0, #28]", 
 
-        // Save new PSP (points to saved R4)
+        // Save new r0 
         "msr psp, r0", 
 
-        // Call to get new sp, result in r0 (null = no switch)
+        // Call to get new sp, result stores in r0 
         "bl get_new_sp",
 
-        // Check if null (no switch needed)
-        "cmp r0, #0",
-        "beq 1f",
-
-        // Switch: r0 = new_sp, call setcontext
+        // set new context given r0
         "bl setcontext",
-
-        // No switch: restore R4-R11 from PSP and return
-        "1:",
-        "mrs r0, psp",
-        
-        "ldr r4, [r0, #0]",
-        "ldr r5, [r0, #4]",
-        "ldr r6, [r0, #8]",
-        "ldr r7, [r0, #12]",
-        
-        "ldr r1, [r0, #16]",
-        "mov r8, r1",
-        "ldr r1, [r0, #20]",
-        "mov r9, r1",
-        "ldr r1, [r0, #24]",
-        "mov r10, r1",
-        "ldr r1, [r0, #28]",
-        "mov r11, r1",
-        
-        // Restore PSP to exception frame
-        "adds r0, r0, #32",
-        "msr psp, r0",
-        
-        // Return via EXC_RETURN
-        "ldr r0, =0xFFFFFFFD",
-        "bx r0",
     );
 }
